@@ -759,12 +759,15 @@ function renderParticipants(){
   if(!allParticipants.length){list.innerHTML='<div class="empty-note">まだ回答がありません</div>';return}
   list.innerHTML=allParticipants.map(p=>`<div class="participant-chip${viewingName===p.name?' viewing':''}" data-name="${p.name}">${p.name}</div>`).join('');
   list.querySelectorAll('.participant-chip').forEach(chip=>{
-    chip.addEventListener('click',()=>{
+    chip.addEventListener('click',async()=>{
       const name=chip.dataset.name;
-      const userSel={};
-      Object.entries(dashData).forEach(([date,states])=>{
-        ['ok','maybe','ng'].forEach(st=>{if((states[st]||[]).includes(name)) userSel[date]=st});
-      });
+      // ローディング表示
+      chip.textContent=name+' …';
+      chip.style.opacity='0.6';
+      // 全期間のデータを取得してから閲覧モードへ
+      const userSel = await fetchAllSelectionsForUser(name);
+      chip.textContent=name;
+      chip.style.opacity='';
       document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
       document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
       document.querySelector('[data-tab="answer"]').classList.add('active');
@@ -772,6 +775,40 @@ function renderParticipants(){
       enterViewMode(name,userSel);
     });
   });
+}
+
+// ── 指定ユーザーの全期間回答を取得 ──
+async function fetchAllSelectionsForUser(name){
+  const userSel={};
+  if(GAS_URL==='YOUR_GAS_URL_HERE'){
+    // デモ：dashDataから取得
+    Object.entries(dashData).forEach(([date,states])=>{
+      ['ok','maybe','ng'].forEach(st=>{if((states[st]||[]).includes(name)) userSel[date]=st});
+    });
+    return userSel;
+  }
+  // 全対象月を順に取得
+  try{
+    // calMin〜calMaxの全月をループ
+    let y=calMinYear, m=calMinMonth;
+    const fetches=[];
+    while(y<calMaxYear||(y===calMaxYear&&m<=calMaxMonth)){
+      fetches.push(fetch(`${GAS_URL}?action=get&year=${y}&month=${m+1}`)
+        .then(r=>r.json())
+        .then(json=>{
+          const data=json.data||{};
+          Object.entries(data).forEach(([date,states])=>{
+            ['ok','maybe','ng'].forEach(st=>{
+              if((states[st]||[]).includes(name)) userSel[date]=st;
+            });
+          });
+        })
+      );
+      m++;if(m>11){m=0;y++;}
+    }
+    await Promise.all(fetches);
+  }catch(e){ console.warn('全期間取得失敗',e); }
+  return userSel;
 }
 
 // ── 管理者パネル ──
