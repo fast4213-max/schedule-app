@@ -193,7 +193,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
           <span>〜</span>
           <select id="adminMonth2"></select>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">同じ月にすると1ヶ月表示</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">開始月〜終了月を設定（何ヶ月でもOK）</div>
       </div>
       <div class="form-row">
         <div class="toggle-row">
@@ -488,10 +488,12 @@ async function saveConfig(){
   applyConfig();
   if(GAS_URL==='YOUR_GAS_URL_HERE') return;
   try{
-    const savePayload={...config}; if(config.adminPinHash) savePayload.adminPin=config.adminPinHash; await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'save_config',config:savePayload})});
+    const savePayload={...config};
+    // パスワード変更があればハッシュ値をadminPinとして送る
+    if(config.adminPinHash) savePayload.adminPin=config.adminPinHash;
+    await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'save_config',config:savePayload})});
   }catch(e){}
 }
-
 function applyConfig(){
   document.getElementById('headerTitle').textContent='📅 '+config.eventName;
   document.title=config.eventName;
@@ -589,11 +591,13 @@ document.getElementById('nameInput').addEventListener('input',updateSubmitBtn);
 document.getElementById('pinInput').addEventListener('input',updateSubmitBtn);
 document.getElementById('prevMonthBtn').addEventListener('click',()=>{
   if(calYear===calMinYear&&calMonth===calMinMonth) return;
-  calMonth--;if(calMonth<0){calMonth=11;calYear--}renderCal();
+  calMonth--;if(calMonth<0){calMonth=11;calYear--}
+  renderCal(); // selectionsは変更しない
 });
 document.getElementById('nextMonthBtn').addEventListener('click',()=>{
   if(calYear===calMaxYear&&calMonth===calMaxMonth) return;
-  calMonth++;if(calMonth>11){calMonth=0;calYear++}renderCal();
+  calMonth++;if(calMonth>11){calMonth=0;calYear++}
+  renderCal(); // selectionsは変更しない
 });
 
 // ── 送信 ──
@@ -812,12 +816,12 @@ function populateMonthSelects(){
   ['adminMonth1','adminMonth2'].forEach((id,idx)=>{
     const sel=document.getElementById(id);
     sel.innerHTML='';
-    for(let i=0;i<12;i++){
+    // 24ヶ月分（約2年）表示
+    for(let i=0;i<24;i++){
       const d=new Date(now.getFullYear(),now.getMonth()+i,1);
-      const y=d.getFullYear(),m1idx=d.getMonth()+1; // 1始まり
+      const y=d.getFullYear(),m1idx=d.getMonth()+1;
       const o=new Option(`${y}年${m1idx}月`,`${y}-${m1idx}`);
       const cfg=idx===0?config.month1:config.month2;
-      // config.monthは0始まりなので+1して比較
       if(cfg&&cfg.year===y&&cfg.month+1===m1idx) o.selected=true;
       sel.appendChild(o);
     }
@@ -832,17 +836,22 @@ document.getElementById('adminSaveBtn').addEventListener('click',async()=>{
   const [y2,m2str]=document.getElementById('adminMonth2').value.split('-');
   const y1n=Number(y1),m1n=Number(m1str)-1; // 0始まりに変換
   const y2n=Number(y2),m2n=Number(m2str)-1;
+  // 終了月が開始月より前の場合は自動で開始月に合わせる
+  const validEnd=(y2n>y1n||(y2n===y1n&&m2n>=m1n));
+  if(!validEnd){ showToast('⚠ 終了月は開始月以降にしてください'); return; }
+  // 期間を表示
+  const monthCount=(y2n-y1n)*12+(m2n-m1n)+1;
   if(name) config.eventName=name;
   if(newPin.length===4){ config.adminPin=newPin; config.adminPinHash=simpleHash(newPin); }
   config.month1={year:y1n,month:m1n};
-  config.month2=(y2n>y1n||(y2n===y1n&&m2n>=m1n))?{year:y2n,month:m2n}:{year:y1n,month:m1n};
+  config.month2={year:y2n,month:m2n};
   config.closed=document.getElementById('closedToggle').classList.contains('on');
   const btn=document.getElementById('adminSaveBtn');
   btn.textContent='保存中…';btn.disabled=true;
-  if(newPin.length===4) config.adminPinHash=simpleHash(newPin); await saveConfig();
+  await saveConfig();
   btn.textContent='💾 設定を保存';btn.disabled=false;
   document.getElementById('adminOverlay').classList.remove('open');
-  showToast('✓ 設定を保存しました');
+  showToast(`✓ 保存しました（対象：${monthCount}ヶ月）`);
 });
 
 // ── 削除セレクト更新 ──
