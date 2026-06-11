@@ -814,10 +814,11 @@ function populateMonthSelects(){
     sel.innerHTML='';
     for(let i=0;i<12;i++){
       const d=new Date(now.getFullYear(),now.getMonth()+i,1);
-      const y=d.getFullYear(),m=d.getMonth();
-      const o=new Option(`${y}年${m+1}月`,`${y}-${m}`);
+      const y=d.getFullYear(),m1idx=d.getMonth()+1; // 1始まり
+      const o=new Option(`${y}年${m1idx}月`,`${y}-${m1idx}`);
       const cfg=idx===0?config.month1:config.month2;
-      if(cfg&&cfg.year===y&&cfg.month===m) o.selected=true;
+      // config.monthは0始まりなので+1して比較
+      if(cfg&&cfg.year===y&&cfg.month+1===m1idx) o.selected=true;
       sel.appendChild(o);
     }
   });
@@ -827,12 +828,14 @@ document.getElementById('closedToggle').addEventListener('click',function(){this
 document.getElementById('adminSaveBtn').addEventListener('click',async()=>{
   const name=document.getElementById('adminEventName').value.trim();
   const newPin=toHalf(document.getElementById("adminNewPin").value);
-  const [y1,m1]=document.getElementById('adminMonth1').value.split('-').map(Number);
-  const [y2,m2]=document.getElementById('adminMonth2').value.split('-').map(Number);
+  const [y1,m1str]=document.getElementById('adminMonth1').value.split('-');
+  const [y2,m2str]=document.getElementById('adminMonth2').value.split('-');
+  const y1n=Number(y1),m1n=Number(m1str)-1; // 0始まりに変換
+  const y2n=Number(y2),m2n=Number(m2str)-1;
   if(name) config.eventName=name;
   if(newPin.length===4){ config.adminPin=newPin; config.adminPinHash=simpleHash(newPin); }
-  config.month1={year:y1,month:m1};
-  config.month2=(y2>y1||(y2===y1&&m2>=m1))?{year:y2,month:m2}:{year:y1,month:m1};
+  config.month1={year:y1n,month:m1n};
+  config.month2=(y2n>y1n||(y2n===y1n&&m2n>=m1n))?{year:y2n,month:m2n}:{year:y1n,month:m1n};
   config.closed=document.getElementById('closedToggle').classList.contains('on');
   const btn=document.getElementById('adminSaveBtn');
   btn.textContent='保存中…';btn.disabled=true;
