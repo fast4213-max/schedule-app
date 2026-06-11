@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スケジュール調整</title>
+<style>
+:root {
+  --bg:#f0f2f5; --surface:#fff; --border:#e2e6eb;
+  --text:#1a1d23; --muted:#8a909c; --accent:#4f7cff;
+  --ok:#22c27a; --maybe:#f5a623; --ng:#f04b4b;
+  --ok-bg:#eafbf3; --maybe-bg:#fff8ed; --ng-bg:#fef0f0;
+  --radius:14px; --shadow:0 1px 4px rgba(0,0,0,.07);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;min-height:100vh;padding-bottom:60px}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20;box-shadow:var(--shadow)}
+.header-title{font-size:17px;font-weight:700}
+.admin-btn{font-size:12px;padding:6px 12px;background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;color:var(--muted);transition:all .15s}
+.admin-btn:hover{background:var(--bg);color:var(--text)}
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px}
+.tab{flex:1;text-align:center;padding:12px 0;font-size:14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;transition:all .15s}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.container{max-width:480px;margin:0 auto;padding:16px}
+.page{display:none}.page.active{display:block}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px}
+.input-field{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:11px 14px;font-size:16px;outline:none;transition:border-color .15s;background:var(--surface);color:var(--text)}
+.input-field:focus{border-color:var(--accent)}
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-nav-btn{background:none;border:1px solid var(--border);border-radius:8px;width:32px;height:32px;font-size:16px;cursor:pointer;color:var(--text);transition:background .1s;display:flex;align-items:center;justify-content:center}
+.cal-nav-btn:disabled{opacity:.3;cursor:not-allowed}
+.cal-nav-btn:not(:disabled):hover{background:var(--bg)}
+.cal-month-label{font-size:15px;font-weight:700}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-dow{text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:4px 0}
+.cal-dow.sun{color:var(--ng)}.cal-dow.sat{color:var(--accent)}
+.cal-day{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;border:1.5px solid transparent;user-select:none;transition:all .12s;gap:1px}
+.cal-day:hover:not(.empty):not(.past):not(.readonly){background:var(--bg)}
+.cal-day.empty,.cal-day.past{cursor:default}.cal-day.readonly{cursor:default}
+.day-num{font-size:13px;font-weight:600;line-height:1}
+.day-badge{font-size:9px;font-weight:700;line-height:1}
+.cal-day.sun .day-num{color:var(--ng)}.cal-day.sat .day-num{color:var(--accent)}
+.cal-day.past .day-num,.cal-day.empty .day-num{color:#ccc}
+.cal-day.holiday .day-num{color:var(--ng)}
+.cal-day.holiday .day-holiday{font-size:7px;color:var(--ng);font-weight:700;line-height:1;text-align:center;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 1px}
+.cal-day.past.holiday .day-num{color:#ccc}
+.cal-day.state-ok{background:var(--ok-bg);border-color:var(--ok)}
+.cal-day.state-maybe{background:var(--maybe-bg);border-color:var(--maybe)}
+.cal-day.state-ng{background:var(--ng-bg);border-color:var(--ng)}
+.cal-day.state-ok .day-num,.cal-day.state-ok .day-badge{color:var(--ok)}
+.cal-day.state-maybe .day-num,.cal-day.state-maybe .day-badge{color:var(--maybe)}
+.cal-day.state-ng .day-num,.cal-day.state-ng .day-badge{color:var(--ng)}
+.legend{display:flex;gap:10px;margin-top:12px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.selected-list{display:flex;flex-direction:column;gap:6px}
+.selected-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;font-size:14px}
+.selected-item.ok{background:var(--ok-bg);color:var(--ok)}
+.selected-item.maybe{background:var(--maybe-bg);color:var(--maybe)}
+.selected-item.ng{background:var(--ng-bg);color:var(--ng)}
+.selected-item .date-lbl{font-weight:600}
+.empty-note{color:var(--muted);font-size:13px;text-align:center;padding:16px 0}
+.btn{width:100%;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .15s,transform .1s}
+.btn:active{transform:scale(.98)}.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-secondary{background:var(--surface);color:var(--text);border:1.5px solid var(--border);margin-top:8px}
+.btn-warning{background:var(--maybe);color:#fff;margin-top:8px}
+.btn-danger{background:var(--ng);color:#fff}
+.btn-danger-outline{background:#fff;color:var(--ng);border:1.5px solid var(--ng)}
+.btn-sm{padding:7px 14px;font-size:13px;width:auto;border-radius:8px}
+.view-banner{display:flex;align-items:center;justify-content:space-between;background:#fffbe6;border:1.5px solid var(--maybe);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px}
+.view-banner .close-view{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted)}
+.dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.dash-title{font-size:16px;font-weight:700}
+.dash-month-nav{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.dash-month-nav button{background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;font-size:14px;cursor:pointer;color:var(--text);display:flex;align-items:center;justify-content:center}
+.dash-month-nav button:disabled{opacity:.3;cursor:not-allowed}
+.dash-row{display:grid;grid-template-columns:88px 1fr 1fr 1fr;align-items:center;padding:9px 4px;border-bottom:1px solid var(--border);font-size:13px;gap:2px}
+.dash-row:last-child{border-bottom:none}
+.dash-row.hdr{font-weight:700;font-size:11px;color:var(--muted);padding-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.dash-date{font-weight:600;font-size:13px}
+.dash-cell{display:flex;align-items:center;gap:3px;font-weight:700;cursor:pointer;padding:2px 4px;border-radius:6px;transition:background .1s}
+.dash-cell:hover{opacity:.75}
+.ok-col{color:var(--ok)}.maybe-col{color:var(--maybe)}.ng-col{color:var(--ng)}
+.participants-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
+.participants-list{display:flex;flex-wrap:wrap;gap:8px}
+.participant-chip{padding:6px 14px;border-radius:999px;font-size:13px;font-weight:600;background:var(--bg);border:1.5px solid var(--border);cursor:pointer;transition:all .15s;color:var(--text)}
+.participant-chip:hover{border-color:var(--accent);color:var(--accent)}
+.participant-chip.viewing{background:#eef2ff;border-color:var(--accent);color:var(--accent)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:flex-end;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;animation:slideUp .22s ease}
+@keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:99px;margin:0 auto 18px}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:16px}
+.modal-close-btn{float:right;background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
+.name-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.name-chip{padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.chip-ok{background:var(--ok-bg);color:var(--ok)}
+.chip-maybe{background:var(--maybe-bg);color:var(--maybe)}
+.chip-ng{background:var(--ng-bg);color:var(--ng)}
+.chip-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:6px}
+.pin-input{width:100%;letter-spacing:8px;font-size:28px;font-weight:700;text-align:center;border:2px solid var(--border);border-radius:10px;padding:12px;outline:none;transition:border-color .15s}
+.pin-input:focus{border-color:var(--accent)}
+.pin-hint{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+.error-msg{color:var(--ng);font-size:13px;text-align:center;margin-top:8px}
+/* admin */
+.admin-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50}
+.admin-overlay.open{display:flex;align-items:flex-start;justify-content:center}
+.admin-panel{background:var(--surface);border-radius:0 0 var(--radius) var(--radius);padding:20px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.admin-panel-title{font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+.form-row{margin-bottom:14px}
+.form-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;display:block}
+.month-range-row{display:flex;gap:8px;align-items:center;font-size:13px}
+.month-range-row select{flex:1;border:1.5px solid var(--border);border-radius:8px;padding:9px 10px;font-size:14px;outline:none;background:var(--surface);color:var(--text)}
+.month-range-row select:focus{border-color:var(--accent)}
+.toggle-row{display:flex;align-items:center;justify-content:space-between}
+.toggle-label{font-size:14px}
+.toggle{width:44px;height:26px;background:var(--border);border-radius:99px;position:relative;cursor:pointer;transition:background .2s;border:none}
+.toggle.on{background:var(--ok)}
+.toggle::after{content:'';position:absolute;width:20px;height:20px;background:#fff;border-radius:50%;top:3px;left:3px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle.on::after{left:21px}
+.section-divider{height:1px;background:var(--border);margin:18px 0}
+.danger-zone-title{font-size:12px;font-weight:700;color:var(--ng);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.delete-row{display:flex;gap:8px;align-items:stretch}
+.delete-row select{flex:1;border:1.5px solid var(--border);border-radius:8px;padding:9px 10px;font-size:14px;outline:none;background:var(--surface);color:var(--text)}
+/* confirm modal */
+.confirm-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center}
+.confirm-modal-overlay.open{display:flex}
+.confirm-modal{background:var(--surface);border-radius:16px;padding:24px 20px;width:calc(100% - 48px);max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.18);animation:fadeIn .18s ease}
+@keyframes fadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+.confirm-icon{font-size:32px;text-align:center;margin-bottom:10px}
+.confirm-title{font-size:16px;font-weight:700;text-align:center;margin-bottom:6px}
+.confirm-msg{font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px;line-height:1.6}
+.confirm-btns{display:flex;gap:10px}
+.confirm-btns button{flex:1;padding:12px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;border:none;transition:opacity .15s}
+.confirm-btns .btn-cancel{background:var(--bg);color:var(--text)}
+.confirm-btns .btn-ok{background:var(--ng);color:#fff}
+/* status badge */
+.status-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;margin-left:8px}
+.badge-loading{background:#eef2ff;color:var(--accent)}
+.badge-ok{background:var(--ok-bg);color:var(--ok)}
+.badge-error{background:var(--ng-bg);color:var(--ng)}
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(16px);background:#1a1d23;color:#fff;padding:10px 22px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;white-space:nowrap;z-index:300}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-title" id="headerTitle">📅 スケジュール調整</div>
+  <button class="admin-btn" id="adminBtn">⚙ 管理</button>
+</header>
+
+<!-- ══ 管理パネル ══ -->
+<div class="admin-overlay" id="adminOverlay">
+  <div class="admin-panel">
+    <div class="admin-panel-title">
+      管理者設定
+      <button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)" id="adminClose">×</button>
+    </div>
+
+    <!-- ログイン -->
+    <div id="adminLoginArea">
+      <div class="form-row">
+        <label class="form-label">管理者パスワード（4桁）</label>
+        <input type="password" inputmode="numeric" maxlength="4" class="pin-input" id="adminPinInput" placeholder="0000">
+        <div class="error-msg" id="adminPinError"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;text-align:center">
+        ※ パスワードはスプレッドシートの settings シートで管理されます
+      </div>
+      <button class="btn btn-primary" id="adminLoginBtn">ログイン</button>
+    </div>
+
+    <!-- 設定 -->
+    <div id="adminSettingsArea" style="display:none">
+      <!-- 基本設定 -->
+      <div class="form-row">
+        <label class="form-label">イベント名</label>
+        <input type="text" class="input-field" id="adminEventName" placeholder="例：6月の飲み会" maxlength="30">
+      </div>
+      <div class="form-row">
+        <label class="form-label">管理者パスワード変更（4桁）</label>
+        <input type="password" inputmode="numeric" maxlength="4" class="input-field" id="adminNewPin" placeholder="変更する場合のみ入力">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">変更するとスプレッドシートにも反映されます</div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">対象月</label>
+        <div class="month-range-row">
+          <select id="adminMonth1"></select>
+          <span>〜</span>
+          <select id="adminMonth2"></select>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">同じ月にすると1ヶ月表示</div>
+      </div>
+      <div class="form-row">
+        <div class="toggle-row">
+          <span class="toggle-label">回答を締め切る</span>
+          <button class="toggle" id="closedToggle"></button>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="adminSaveBtn">💾 設定を保存</button>
+
+      <!-- 区切り -->
+      <div class="section-divider"></div>
+
+      <!-- 危険ゾーン -->
+      <div class="danger-zone-title">🗑 データ削除</div>
+
+      <!-- 1人削除 -->
+      <div class="form-row">
+        <label class="form-label">特定の参加者を削除</label>
+        <div class="delete-row">
+          <select id="adminDeleteSelect">
+            <option value="">-- 名前を選択 --</option>
+          </select>
+          <button class="btn btn-sm btn-danger" id="adminDeleteOneBtn">削除</button>
+        </div>
+      </div>
+
+      <!-- 全員クリア -->
+      <div class="form-row" style="margin-top:4px">
+        <button class="btn btn-danger-outline" id="adminClearAllBtn" style="font-size:14px;padding:12px">
+          ⚠ 全員のデータをクリア
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ タブ ══ -->
+<div class="tabs">
+  <div class="tab active" data-tab="answer">回答する</div>
+  <div class="tab" data-tab="dashboard">ダッシュボード</div>
+</div>
+
+<!-- ══ 回答ページ ══ -->
+<div class="page active" id="page-answer">
+  <div class="container">
+    <div id="closedBanner" style="display:none" class="card">
+      <div style="text-align:center;color:var(--ng);font-weight:700;padding:8px 0">⚠ 現在、回答を受け付けていません</div>
+    </div>
+    <div id="answerForm">
+      <div class="view-banner" id="viewBanner" style="display:none">
+        <span>👁 <strong id="viewingNameLabel"></strong> の回答を表示中</span>
+        <button class="close-view" id="closeViewBtn">×</button>
+      </div>
+      <div class="card" id="nameCard">
+        <div class="card-title">あなたの名前</div>
+        <input type="text" class="input-field" id="nameInput" placeholder="名前を入力" maxlength="20">
+      </div>
+      <div class="card" id="pinCard">
+        <div class="card-title">パスワード（4桁・修正時に使用）</div>
+        <input type="password" inputmode="numeric" maxlength="4" class="input-field pin-input" id="pinInput" placeholder="0000" style="letter-spacing:8px;font-size:24px;text-align:center">
+        <div class="pin-hint">※ 後で修正するときに使います</div>
+      </div>
+      <div class="card">
+        <div class="card-title">日程を選ぶ</div>
+        <div class="cal-nav">
+          <button class="cal-nav-btn" id="prevMonthBtn">‹</button>
+          <span class="cal-month-label" id="calMonthLabel"></span>
+          <button class="cal-nav-btn" id="nextMonthBtn">›</button>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="legend">
+          <span style="color:var(--ok)">○</span><span style="margin-left:2px">OK</span>
+          <span style="color:var(--maybe);margin-left:8px">△</span><span style="margin-left:2px">△</span>
+          <span style="color:var(--ng);margin-left:8px">✕</span><span style="margin-left:2px">NG</span>
+          <span style="margin-left:auto;color:var(--muted);font-size:11px">タップで切替</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">選択中の日程</div>
+        <div class="selected-list" id="selectedList">
+          <div class="empty-note">カレンダーで日付をタップしてください</div>
+        </div>
+      </div>
+      <div id="submitArea">
+        <button class="btn btn-primary" id="submitBtn" disabled>回答を送信</button>
+      </div>
+      <div id="editArea" style="display:none">
+        <button class="btn btn-warning" id="editBtn">✏ この内容を修正する</button>
+        <button class="btn btn-secondary" id="cancelViewBtn">キャンセル</button>
+      </div>
+
+      <!-- 回答後の案内 -->
+      <div class="card" style="margin-top:14px;background:#f8faff;border-color:#d0dcff">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">📊 ダッシュボードについて</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.8">
+          回答を送信したら <strong>「ダッシュボード」タブ</strong> でみんなの回答状況を確認できます。
+        </div>
+        <div style="margin-top:10px;padding:10px 12px;background:#eef2ff;border-radius:8px;font-size:12px;color:#4f7cff;line-height:1.8">
+          ✏ <strong>回答を修正したいときは</strong><br>
+          ダッシュボード →「参加者」の自分の名前をタップ → 「✏ この内容を修正する」
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ダッシュボードページ ══ -->
+<div class="page" id="page-dashboard">
+  <div class="container">
+
+    <!-- 使い方ガイド -->
+    <div class="card" style="background:#f8faff;border-color:#d0dcff;padding:14px 16px">
+      <div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">📖 ダッシュボードの使い方</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.9">
+        <div>📅 <strong>日付の人数</strong>をタップ → ○△✕ 別の名前一覧が見られます</div>
+        <div>👤 <strong>参加者の名前</strong>をタップ → その人の回答をカレンダーで確認</div>
+        <div>‹ › <strong>月ナビ</strong> → 前後の月を切り替えられます</div>
+      </div>
+      <div style="margin-top:10px;padding:10px 12px;background:#eef2ff;border-radius:8px;font-size:12px;color:#4f7cff;line-height:1.9">
+        ✏ <strong>回答を修正したいときは</strong><br>
+        ① 下の「参加者」から自分の名前をタップ<br>
+        ② 「回答する」タブに切り替わるので「✏ この内容を修正する」をタップ<br>
+        ③ 登録時のパスワード（4桁）を入力 → カレンダーを編集 → 「修正を保存」
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="dash-header">
+        <div class="dash-title">みんなの回答</div>
+        <div class="dash-month-nav">
+          <button id="dashPrevBtn" disabled>‹</button>
+          <span id="dashMonthLabel"></span>
+          <button id="dashNextBtn" disabled>›</button>
+        </div>
+      </div>
+      <div>
+        <div class="dash-row hdr">
+          <div>日付</div><div class="ok-col">○ OK</div><div class="maybe-col">△</div><div class="ng-col">✕ NG</div>
+        </div>
+        <div id="dashBody"><div class="empty-note">読み込み中…</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="participants-title">参加者</div>
+      <div class="participants-list" id="participantsList">
+        <div class="empty-note">まだ回答がありません</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 詳細モーダル -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <button class="modal-close-btn" id="detailClose">×</button>
+    <div class="modal-title" id="detailTitle"></div>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<!-- PIN確認モーダル -->
+<div class="overlay" id="pinOverlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="pinModalTitle">パスワードを入力</div>
+    <input type="password" inputmode="numeric" maxlength="4" class="pin-input" id="pinVerifyInput" placeholder="0000">
+    <div class="error-msg" id="pinError"></div>
+    <div class="pin-hint">回答時に設定した4桁のパスワード</div>
+    <button class="btn btn-primary" id="pinConfirmBtn" style="margin-top:16px">確認</button>
+    <button class="btn btn-secondary" id="pinCancelBtn">キャンセル</button>
+  </div>
+</div>
+
+<!-- 確認モーダル（汎用） -->
+<div class="confirm-modal-overlay" id="confirmOverlay">
+  <div class="confirm-modal">
+    <div class="confirm-icon" id="confirmIcon">⚠️</div>
+    <div class="confirm-title" id="confirmTitle"></div>
+    <div class="confirm-msg" id="confirmMsg"></div>
+    <div class="confirm-btns">
+      <button class="btn-cancel" id="confirmCancelBtn">キャンセル</button>
+      <button class="btn-ok" id="confirmOkBtn">削除する</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════
+// ★ GAS Web App URLをここに貼る
+const GAS_URL = 'YOUR_GAS_URL_HERE';
+// ════════════════════════════════
+
+const STATES=[null,'ok','maybe','ng'];
+const SL={ok:'○',maybe:'△',ng:'✕'};
+
+let config={eventName:'スケジュール調整',adminPin:'0000',month1:null,month2:null,closed:false};
+let calYear,calMonth,calMinYear,calMinMonth,calMaxYear,calMaxMonth;
+let selections={};
+let dashYear,dashMonth;
+let dashData={},allParticipants=[];
+let viewingName=null,editingName=null,isEditMode=false;
+let holidays={}; // { 'YYYY-MM-DD': '祝日名' }
+
+// ── utils ──
+function toKey(d){return`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
+function pad(n){return String(n).padStart(2,'0')}
+function todayDate(){const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
+function fmtKey(k){const[y,m,d]=k.split('-');const dt=new Date(+y,+m-1,+d);const isHol=holidays[k]?'🎌':'';return`${+m}/${+d}(${'日月火水木金土'[dt.getDay()]}${isHol})`}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+function simpleHash(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))&0xffffffff;return h.toString(16)}
+
+// ── 祝日読み込み ──
+async function loadHolidays(){
+  // キャッシュ確認（当日中は再取得しない）
+  const cacheKey='holidays_cache';
+  const cached=sessionStorage.getItem(cacheKey);
+  if(cached){
+    try{ holidays=JSON.parse(cached); return; }catch(e){}
+  }
+  if(GAS_URL==='YOUR_GAS_URL_HERE'){
+    // デモ用：固定の祝日データ（2026〜2027年・内閣府公式データ準拠）
+    holidays={
+      // 2026年（令和8年）
+      '2026-01-01':'元日','2026-01-12':'成人の日',
+      '2026-02-11':'建国記念の日','2026-02-23':'天皇誕生日',
+      '2026-03-20':'春分の日',
+      '2026-04-29':'昭和の日',
+      '2026-05-03':'憲法記念日','2026-05-04':'みどりの日','2026-05-05':'こどもの日','2026-05-06':'休日',
+      '2026-07-20':'海の日',
+      '2026-08-11':'山の日',
+      '2026-09-21':'敬老の日','2026-09-22':'休日','2026-09-23':'秋分の日',
+      '2026-10-12':'スポーツの日',
+      '2026-11-03':'文化の日','2026-11-23':'勤労感謝の日',
+      // 2027年（令和9年）
+      '2027-01-01':'元日','2027-01-11':'成人の日',
+      '2027-02-11':'建国記念の日','2027-02-23':'天皇誕生日',
+      '2027-03-21':'春分の日','2027-03-22':'休日',
+      '2027-04-29':'昭和の日',
+      '2027-05-03':'憲法記念日','2027-05-04':'みどりの日','2027-05-05':'こどもの日',
+      '2027-07-19':'海の日',
+      '2027-08-11':'山の日',
+      '2027-09-20':'敬老の日','2027-09-23':'秋分の日',
+      '2027-10-11':'スポーツの日',
+      '2027-11-03':'文化の日','2027-11-23':'勤労感謝の日',
+    };
+    sessionStorage.setItem(cacheKey,JSON.stringify(holidays));
+    return;
+  }
+  try{
+    const res=await fetch(`${GAS_URL}?action=get_holidays`);
+    const json=await res.json();
+    if(json.holidays){ holidays=json.holidays; sessionStorage.setItem(cacheKey,JSON.stringify(holidays)); }
+  }catch(e){ console.warn('祝日取得失敗',e); }
+}
+
+// ── 確認モーダル ──
+function showConfirm({icon='⚠️',title,msg,okLabel='削除する',okColor=null}){
+  return new Promise(resolve=>{
+    document.getElementById('confirmIcon').textContent=icon;
+    document.getElementById('confirmTitle').textContent=title;
+    document.getElementById('confirmMsg').textContent=msg;
+    const okBtn=document.getElementById('confirmOkBtn');
+    okBtn.textContent=okLabel;
+    if(okColor) okBtn.style.background=okColor;
+    else okBtn.style.background='var(--ng)';
+    document.getElementById('confirmOverlay').classList.add('open');
+    const cleanup=()=>document.getElementById('confirmOverlay').classList.remove('open');
+    okBtn.onclick=()=>{cleanup();resolve(true)};
+    document.getElementById('confirmCancelBtn').onclick=()=>{cleanup();resolve(false)};
+  });
+}
+
+// ── 設定：GASから読み込み ──
+async function loadConfig(){
+  if(GAS_URL==='YOUR_GAS_URL_HERE'){
+    applyConfig(); return;
+  }
+  try{
+    const res=await fetch(`${GAS_URL}?action=get_config`);
+    const json=await res.json();
+    if(json.config) Object.assign(config,json.config);
+  }catch(e){}
+  applyConfig();
+}
+
+// ── 設定：GASに保存 ──
+async function saveConfig(){
+  applyConfig();
+  if(GAS_URL==='YOUR_GAS_URL_HERE') return;
+  try{
+    const savePayload={...config}; if(config.adminPinHash) savePayload.adminPin=config.adminPinHash; await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'save_config',config:savePayload})});
+  }catch(e){}
+}
+
+function applyConfig(){
+  document.getElementById('headerTitle').textContent='📅 '+config.eventName;
+  document.title=config.eventName;
+  const now=new Date();
+  if(config.month1){calMinYear=config.month1.year;calMinMonth=config.month1.month}
+  else{calMinYear=now.getFullYear();calMinMonth=now.getMonth()}
+  if(config.month2){calMaxYear=config.month2.year;calMaxMonth=config.month2.month}
+  else{calMaxYear=calMinYear;calMaxMonth=calMinMonth}
+  calYear=calMinYear;calMonth=calMinMonth;
+  renderCal();
+  const banner=document.getElementById('closedBanner');
+  const form=document.getElementById('answerForm');
+  if(config.closed){banner.style.display='block';form.style.display='none'}
+  else{banner.style.display='none';form.style.display='block'}
+  dashYear=calMinYear;dashMonth=calMinMonth;
+  updateDashNavBtns();renderDashMonthLabel();
+}
+
+// ── タブ ──
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('page-'+tab.dataset.tab).classList.add('active');
+    if(tab.dataset.tab==='dashboard') loadDashboard();
+  });
+});
+
+// ── カレンダー ──
+function renderCal(){
+  const firstDay=new Date(calYear,calMonth,1).getDay();
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  const todayD=todayDate();
+  document.getElementById('calMonthLabel').textContent=`${calYear}年${calMonth+1}月`;
+  document.getElementById('prevMonthBtn').disabled=(calYear===calMinYear&&calMonth===calMinMonth);
+  document.getElementById('nextMonthBtn').disabled=(calYear===calMaxYear&&calMonth===calMaxMonth);
+  const grid=document.getElementById('calGrid');
+  grid.innerHTML='';
+  '日月火水木金土'.split('').forEach((d,i)=>{
+    const el=document.createElement('div');
+    el.className='cal-dow'+(i===0?' sun':i===6?' sat':'');
+    el.textContent=d;grid.appendChild(el);
+  });
+  for(let i=0;i<firstDay;i++){
+    const el=document.createElement('div');el.className='cal-day empty';
+    const n=document.createElement('div');n.className='day-num';el.appendChild(n);grid.appendChild(el);
+  }
+  for(let d=1;d<=daysInMonth;d++){
+    const date=new Date(calYear,calMonth,d);
+    const key=toKey(date);const dow=date.getDay();
+    const isPast=date<todayD;
+    const isReadonly=viewingName!==null&&!isEditMode;
+    const holName=holidays[key]||null;
+    const isHoliday=holName!==null;
+    // 祝日は日曜と同じ赤（土曜より優先）
+    const colorClass=isHoliday||dow===0?' sun':dow===6?' sat':'';
+    const el=document.createElement('div');
+    el.className='cal-day'+colorClass+(isPast?' past':'')+(isReadonly?' readonly':'')+(isHoliday?' holiday':'');
+    el.title=holName||'';
+
+    const numEl=document.createElement('div');numEl.className='day-num';numEl.textContent=d;
+    const badge=document.createElement('div');badge.className='day-badge';
+    const state=selections[key];
+    if(state){el.classList.add('state-'+state);badge.textContent=SL[state]}
+
+    // 祝日名を小さく表示
+    const holEl=document.createElement('div');
+    holEl.className='day-holiday';
+    if(isHoliday) holEl.textContent=holName;
+
+    el.appendChild(numEl);el.appendChild(badge);el.appendChild(holEl);
+    if(!isPast&&!isReadonly) el.addEventListener('click',()=>toggleDay(key));
+    grid.appendChild(el);
+  }
+}
+function toggleDay(key){
+  const cur=selections[key]||null;
+  const next=STATES[(STATES.indexOf(cur)+1)%STATES.length];
+  if(next===null) delete selections[key]; else selections[key]=next;
+  renderCal();renderSelected();updateSubmitBtn();
+}
+function renderSelected(){
+  const list=document.getElementById('selectedList');
+  const keys=Object.keys(selections).sort();
+  if(!keys.length){list.innerHTML='<div class="empty-note">カレンダーで日付をタップしてください</div>';return}
+  list.innerHTML=keys.map(k=>`<div class="selected-item ${selections[k]}"><span class="date-lbl">${fmtKey(k)}</span><span>${SL[selections[k]]}</span></div>`).join('');
+}
+function updateSubmitBtn(){
+  const name=document.getElementById('nameInput').value.trim();
+  const pin=document.getElementById('pinInput').value.trim();
+  document.getElementById('submitBtn').disabled=!(name&&pin.length===4&&Object.keys(selections).length>0);
+}
+document.getElementById('nameInput').addEventListener('input',updateSubmitBtn);
+document.getElementById('pinInput').addEventListener('input',updateSubmitBtn);
+document.getElementById('prevMonthBtn').addEventListener('click',()=>{
+  if(calYear===calMinYear&&calMonth===calMinMonth) return;
+  calMonth--;if(calMonth<0){calMonth=11;calYear--}renderCal();
+});
+document.getElementById('nextMonthBtn').addEventListener('click',()=>{
+  if(calYear===calMaxYear&&calMonth===calMaxMonth) return;
+  calMonth++;if(calMonth>11){calMonth=0;calYear++}renderCal();
+});
+
+// ── 送信 ──
+document.getElementById('submitBtn').addEventListener('click',async()=>{
+  const name=document.getElementById('nameInput').value.trim();
+  const pin=document.getElementById('pinInput').value.trim();
+  if(!name||pin.length!==4) return;
+  const btn=document.getElementById('submitBtn');
+  btn.innerHTML='<span class="spinner"></span>送信中…';btn.disabled=true;
+  const payload={action:'submit',name,pin_hash:simpleHash(pin),overwrite:isEditMode,
+    selections:Object.entries(selections).map(([date,state])=>({date,state}))};
+  try{
+    if(GAS_URL==='YOUR_GAS_URL_HERE'){
+      await new Promise(r=>setTimeout(r,800));
+      showToast('✓ 送信しました（デモ）');
+      if(!allParticipants.find(p=>p.name===name)) allParticipants.push({name,pin_hash:simpleHash(pin)});
+      exitViewMode();
+    } else {
+      const res=await fetch(GAS_URL,{method:'POST',body:JSON.stringify(payload)});
+      const json=await res.json();
+      if(json.status==='ok'){showToast(isEditMode?'✓ 修正しました':'✓ 回答を送信しました');exitViewMode();loadDashboard()}
+      else if(json.status==='pin_error') showToast('⚠ パスワードが違います');
+      else showToast('⚠ 送信に失敗しました');
+    }
+  }catch(e){showToast('⚠ 送信に失敗しました')}
+  btn.textContent='回答を送信';updateSubmitBtn();isEditMode=false;
+});
+
+// ── 閲覧モード ──
+function enterViewMode(name,userSelections){
+  viewingName=name;isEditMode=false;
+  document.getElementById('nameCard').style.display='none';
+  document.getElementById('pinCard').style.display='none';
+  document.getElementById('submitArea').style.display='none';
+  document.getElementById('editArea').style.display='block';
+  document.getElementById('viewBanner').style.display='flex';
+  document.getElementById('viewingNameLabel').textContent=name;
+  selections={...userSelections};
+  calYear=calMinYear;calMonth=calMinMonth;
+  renderCal();renderSelected();renderParticipants();
+}
+function enterEditMode(){
+  isEditMode=true;
+  document.getElementById('nameCard').style.display='block';
+  document.getElementById('nameInput').value=viewingName;
+  document.getElementById('nameInput').readOnly=true;
+  document.getElementById('pinCard').style.display='block';
+  document.getElementById('pinInput').value='';
+  document.getElementById('submitArea').style.display='block';
+  document.getElementById('editArea').style.display='none';
+  document.getElementById('submitBtn').textContent='修正を保存';
+  renderCal();renderSelected();updateSubmitBtn();
+}
+function exitViewMode(){
+  viewingName=null;isEditMode=false;selections={};
+  document.getElementById('viewBanner').style.display='none';
+  document.getElementById('nameCard').style.display='block';
+  document.getElementById('nameInput').value='';
+  document.getElementById('nameInput').readOnly=false;
+  document.getElementById('pinCard').style.display='block';
+  document.getElementById('pinInput').value='';
+  document.getElementById('submitArea').style.display='block';
+  document.getElementById('editArea').style.display='none';
+  document.getElementById('submitBtn').textContent='回答を送信';
+  calYear=calMinYear;calMonth=calMinMonth;
+  renderCal();renderSelected();updateSubmitBtn();renderParticipants();
+}
+document.getElementById('closeViewBtn').addEventListener('click',exitViewMode);
+document.getElementById('cancelViewBtn').addEventListener('click',exitViewMode);
+document.getElementById('editBtn').addEventListener('click',()=>{
+  document.getElementById('pinModalTitle').textContent=`「${viewingName}」の修正`;
+  document.getElementById('pinVerifyInput').value='';
+  document.getElementById('pinError').textContent='';
+  editingName=viewingName;
+  document.getElementById('pinOverlay').classList.add('open');
+});
+
+// ── PIN確認 ──
+document.getElementById('pinConfirmBtn').addEventListener('click',async()=>{
+  const pin=document.getElementById('pinVerifyInput').value.trim();
+  if(pin.length!==4){document.getElementById('pinError').textContent='4桁で入力してください';return}
+  if(GAS_URL==='YOUR_GAS_URL_HERE'){
+    document.getElementById('pinOverlay').classList.remove('open');enterEditMode();return;
+  }
+  try{
+    const res=await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'verify_pin',name:editingName,pin_hash:simpleHash(pin)})});
+    const json=await res.json();
+    if(json.status==='ok'){document.getElementById('pinOverlay').classList.remove('open');enterEditMode()}
+    else document.getElementById('pinError').textContent='パスワードが違います';
+  }catch(e){document.getElementById('pinError').textContent='確認に失敗しました'}
+});
+document.getElementById('pinCancelBtn').addEventListener('click',()=>document.getElementById('pinOverlay').classList.remove('open'));
+document.getElementById('pinOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('open')});
+
+// ── ダッシュボード ──
+function updateDashNavBtns(){
+  document.getElementById('dashPrevBtn').disabled=(dashYear===calMinYear&&dashMonth===calMinMonth);
+  document.getElementById('dashNextBtn').disabled=(dashYear===calMaxYear&&dashMonth===calMaxMonth);
+}
+function renderDashMonthLabel(){document.getElementById('dashMonthLabel').textContent=`${dashYear}年${dashMonth+1}月`}
+document.getElementById('dashPrevBtn').addEventListener('click',()=>{
+  if(dashYear===calMinYear&&dashMonth===calMinMonth) return;
+  dashMonth--;if(dashMonth<0){dashMonth=11;dashYear--}
+  updateDashNavBtns();renderDashMonthLabel();loadDashboard();
+});
+document.getElementById('dashNextBtn').addEventListener('click',()=>{
+  if(dashYear===calMaxYear&&dashMonth===calMaxMonth) return;
+  dashMonth++;if(dashMonth>11){dashMonth=0;dashYear++}
+  updateDashNavBtns();renderDashMonthLabel();loadDashboard();
+});
+async function loadDashboard(){
+  const body=document.getElementById('dashBody');
+  body.innerHTML='<div class="empty-note">読み込み中…</div>';
+  if(GAS_URL==='YOUR_GAS_URL_HERE'){
+    const y=dashYear,m=pad(dashMonth+1);
+    dashData={[`${y}-${m}-14`]:{ok:['田中','佐藤'],maybe:['鈴木'],ng:[]},
+      [`${y}-${m}-15`]:{ok:['佐藤'],maybe:[],ng:['田中','鈴木']},
+      [`${y}-${m}-21`]:{ok:['田中','佐藤','鈴木'],maybe:[],ng:[]}};
+    allParticipants=[{name:'田中'},{name:'佐藤'},{name:'鈴木'}];
+  } else {
+    try{
+      const res=await fetch(`${GAS_URL}?action=get&year=${dashYear}&month=${dashMonth+1}`);
+      const json=await res.json();
+      dashData=json.data||{};allParticipants=json.participants||[];
+    }catch(e){body.innerHTML='<div class="empty-note">読み込みに失敗しました</div>';return}
+  }
+  renderDashboard();renderParticipants();
+}
+function renderDashboard(){
+  const body=document.getElementById('dashBody');
+  const prefix=`${dashYear}-${pad(dashMonth+1)}-`;
+  const keys=Object.keys(dashData).filter(k=>k.startsWith(prefix)).sort();
+  if(!keys.length){body.innerHTML='<div class="empty-note">この月の回答はまだありません</div>';return}
+  body.innerHTML=keys.map(k=>{
+    const d=dashData[k]||{ok:[],maybe:[],ng:[]};
+    return`<div class="dash-row"><div class="dash-date">${fmtKey(k)}</div>
+      <div class="dash-cell ok-col" data-key="${k}" data-type="ok"><span>${d.ok.length}</span><span style="font-size:11px;font-weight:400">人</span></div>
+      <div class="dash-cell maybe-col" data-key="${k}" data-type="maybe"><span>${d.maybe.length}</span><span style="font-size:11px;font-weight:400">人</span></div>
+      <div class="dash-cell ng-col" data-key="${k}" data-type="ng"><span>${d.ng.length}</span><span style="font-size:11px;font-weight:400">人</span></div></div>`;
+  }).join('');
+  body.querySelectorAll('.dash-cell').forEach(el=>el.addEventListener('click',()=>showDetailModal(el.dataset.key,el.dataset.type)));
+}
+function showDetailModal(key){
+  const d=dashData[key]||{ok:[],maybe:[],ng:[]};
+  document.getElementById('detailTitle').textContent=`${fmtKey(key)} の回答`;
+  document.getElementById('detailContent').innerHTML=
+    ['ok','maybe','ng'].map(t=>{
+      const ns=d[t]||[];if(!ns.length) return'';
+      return`<div style="margin-bottom:14px"><div class="chip-label">${SL[t]} ${t==='ok'?'OK':t==='maybe'?'△':'NG'} (${ns.length}人)</div><div class="name-chips">${ns.map(n=>`<span class="name-chip chip-${t}">${n}</span>`).join('')}</div></div>`;
+    }).join('')||'<div class="empty-note">回答はありません</div>';
+  document.getElementById('detailOverlay').classList.add('open');
+}
+document.getElementById('detailClose').addEventListener('click',()=>document.getElementById('detailOverlay').classList.remove('open'));
+document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('open')});
+
+// ── 参加者 ──
+function renderParticipants(){
+  const list=document.getElementById('participantsList');
+  if(!allParticipants.length){list.innerHTML='<div class="empty-note">まだ回答がありません</div>';return}
+  list.innerHTML=allParticipants.map(p=>`<div class="participant-chip${viewingName===p.name?' viewing':''}" data-name="${p.name}">${p.name}</div>`).join('');
+  list.querySelectorAll('.participant-chip').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      const name=chip.dataset.name;
+      const userSel={};
+      Object.entries(dashData).forEach(([date,states])=>{
+        ['ok','maybe','ng'].forEach(st=>{if((states[st]||[]).includes(name)) userSel[date]=st});
+      });
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      document.querySelector('[data-tab="answer"]').classList.add('active');
+      document.getElementById('page-answer').classList.add('active');
+      enterViewMode(name,userSel);
+    });
+  });
+}
+
+// ── 管理者パネル ──
+document.getElementById('adminBtn').addEventListener('click',()=>{
+  document.getElementById('adminLoginArea').style.display='block';
+  document.getElementById('adminSettingsArea').style.display='none';
+  document.getElementById('adminPinInput').value='';
+  document.getElementById('adminPinError').textContent='';
+  document.getElementById('adminOverlay').classList.add('open');
+});
+document.getElementById('adminClose').addEventListener('click',()=>document.getElementById('adminOverlay').classList.remove('open'));
+document.getElementById('adminOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('open')});
+
+document.getElementById('adminLoginBtn').addEventListener('click',async()=>{
+  const pin=document.getElementById('adminPinInput').value.trim();
+  // GAS接続時はサーバー側で確認、デモ時はconfigと照合
+  let ok=false;
+  if(GAS_URL==='YOUR_GAS_URL_HERE'){
+    ok=(pin===config.adminPin);
+  } else {
+    try{
+      const res=await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'verify_admin',pin_hash:simpleHash(pin)})});
+      const json=await res.json();
+      ok=(json.status==='ok');
+    }catch(e){}
+  }
+  if(ok){
+    document.getElementById('adminLoginArea').style.display='none';
+    document.getElementById('adminSettingsArea').style.display='block';
+    document.getElementById('adminEventName').value=config.eventName;
+    document.getElementById('adminNewPin').value='';
+    populateMonthSelects();
+    document.getElementById('closedToggle').className='toggle'+(config.closed?' on':'');
+    updateDeleteSelect();
+  } else {
+    document.getElementById('adminPinError').textContent='パスワードが違います';
+  }
+});
+
+function populateMonthSelects(){
+  const now=new Date();
+  ['adminMonth1','adminMonth2'].forEach((id,idx)=>{
+    const sel=document.getElementById(id);
+    sel.innerHTML='';
+    for(let i=0;i<12;i++){
+      const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+      const y=d.getFullYear(),m=d.getMonth();
+      const o=new Option(`${y}年${m+1}月`,`${y}-${m}`);
+      const cfg=idx===0?config.month1:config.month2;
+      if(cfg&&cfg.year===y&&cfg.month===m) o.selected=true;
+      sel.appendChild(o);
+    }
+  });
+}
+document.getElementById('closedToggle').addEventListener('click',function(){this.classList.toggle('on')});
+
+document.getElementById('adminSaveBtn').addEventListener('click',async()=>{
+  const name=document.getElementById('adminEventName').value.trim();
+  const newPin=document.getElementById('adminNewPin').value.trim();
+  const [y1,m1]=document.getElementById('adminMonth1').value.split('-').map(Number);
+  const [y2,m2]=document.getElementById('adminMonth2').value.split('-').map(Number);
+  if(name) config.eventName=name;
+  if(newPin.length===4){ config.adminPin=newPin; config.adminPinHash=simpleHash(newPin); }
+  config.month1={year:y1,month:m1};
+  config.month2=(y2>y1||(y2===y1&&m2>=m1))?{year:y2,month:m2}:{year:y1,month:m1};
+  config.closed=document.getElementById('closedToggle').classList.contains('on');
+  const btn=document.getElementById('adminSaveBtn');
+  btn.textContent='保存中…';btn.disabled=true;
+  if(newPin.length===4) config.adminPinHash=simpleHash(newPin); await saveConfig();
+  btn.textContent='💾 設定を保存';btn.disabled=false;
+  document.getElementById('adminOverlay').classList.remove('open');
+  showToast('✓ 設定を保存しました');
+});
+
+// ── 削除セレクト更新 ──
+function updateDeleteSelect(){
+  const sel=document.getElementById('adminDeleteSelect');
+  sel.innerHTML='<option value="">-- 名前を選択 --</option>';
+  allParticipants.forEach(p=>{sel.appendChild(new Option(p.name,p.name))});
+}
+
+// ── 1人削除 ──
+document.getElementById('adminDeleteOneBtn').addEventListener('click',async()=>{
+  const name=document.getElementById('adminDeleteSelect').value;
+  if(!name){showToast('名前を選択してください');return}
+  const ok=await showConfirm({
+    icon:'🗑️',
+    title:`「${name}」を削除`,
+    msg:`${name} さんの回答データをすべて削除します。\nこの操作は元に戻せません。`,
+    okLabel:'削除する'
+  });
+  if(!ok) return;
+  const btn=document.getElementById('adminDeleteOneBtn');
+  btn.textContent='…';btn.disabled=true;
+  if(GAS_URL==='YOUR_GAS_URL_HERE'){
+    await new Promise(r=>setTimeout(r,600));
+    allParticipants=allParticipants.filter(p=>p.name!==name);
+    Object.keys(dashData).forEach(k=>{['ok','maybe','ng'].forEach(st=>{dashData[k][st]=(dashData[k][st]||[]).filter(n=>n!==name)})});
+    showToast(`✓ 「${name}」を削除しました（デモ）`);
+    updateDeleteSelect();renderDashboard();renderParticipants();
+  } else {
+    try{
+      const res=await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'delete_one',name})});
+      const json=await res.json();
+      if(json.status==='ok'){showToast(`✓ 「${name}」を削除しました`);await loadDashboard();updateDeleteSelect()}
+      else showToast('⚠ 削除に失敗しました');
+    }catch(e){showToast('⚠ 削除に失敗しました')}
+  }
+  btn.textContent='削除';btn.disabled=false;
+});
+
+// ── 全員クリア ──
+document.getElementById('adminClearAllBtn').addEventListener('click',async()=>{
+  const ok=await showConfirm({
+    icon:'⚠️',
+    title:'全員のデータをクリア',
+    msg:'全参加者の回答データをすべて削除します。\nこの操作は元に戻せません。本当によろしいですか？',
+    okLabel:'全員削除する'
+  });
+  if(!ok) return;
+  // 2回目確認
+  const ok2=await showConfirm({
+    icon:'🚨',
+    title:'最終確認',
+    msg:'本当に全員分を削除しますか？\nスプレッドシートのデータも消えます。',
+    okLabel:'はい、削除します',
+    okColor:'#1a1d23'
+  });
+  if(!ok2) return;
+  const btn=document.getElementById('adminClearAllBtn');
+  btn.textContent='削除中…';btn.disabled=true;
+  if(GAS_URL==='YOUR_GAS_URL_HERE'){
+    await new Promise(r=>setTimeout(r,800));
+    dashData={};allParticipants=[];
+    showToast('✓ 全データをクリアしました（デモ）');
+    updateDeleteSelect();renderDashboard();renderParticipants();
+  } else {
+    try{
+      const res=await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'clear_all'})});
+      const json=await res.json();
+      if(json.status==='ok'){showToast('✓ 全データをクリアしました');await loadDashboard();updateDeleteSelect()}
+      else showToast('⚠ クリアに失敗しました');
+    }catch(e){showToast('⚠ クリアに失敗しました')}
+  }
+  btn.textContent='⚠ 全員のデータをクリア';btn.disabled=false;
+});
+
+// ── 初期化 ──
+loadConfig();
+loadHolidays().then(()=>renderCal());
+renderSelected();
+</script>
+</body>
+</html>
