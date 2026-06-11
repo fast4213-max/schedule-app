@@ -781,10 +781,9 @@ document.getElementById('adminBtn').addEventListener('click',()=>{
 document.getElementById('adminClose').addEventListener('click',()=>document.getElementById('adminOverlay').classList.remove('open'));
 document.getElementById('adminOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('open')});
 
-document.getElementById('adminLoginBtn').addEventListener('click',async()=>{\n  // 全角数字を半角に変換してトリム
+document.getElementById('adminLoginBtn').addEventListener('click',async()=>{
   const raw=document.getElementById('adminPinInput').value;
   const pin=raw.replace(/[０-９]/g,s=>String.fromCharCode(s.charCodeAt(0)-0xFEE0)).replace(/\s/g,'').trim();
-  // GAS接続時はサーバー側で確認、デモ時はconfigと照合
   let ok=false;
   if(GAS_URL==='YOUR_GAS_URL_HERE'){
     ok=(pin===config.adminPin);
