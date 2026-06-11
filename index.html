@@ -406,6 +406,7 @@ function pad(n){return String(n).padStart(2,'0')}
 function todayDate(){const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
 function fmtKey(k){const[y,m,d]=k.split('-');const dt=new Date(+y,+m-1,+d);const isHol=holidays[k]?'🎌':'';return`${+m}/${+d}(${'日月火水木金土'[dt.getDay()]}${isHol})`}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+function toHalf(s){return s.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/\s/g,"").trim()}
 function simpleHash(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))&0xffffffff;return h.toString(16)}
 
 // ── 祝日読み込み ──
@@ -581,7 +582,7 @@ function renderSelected(){
 }
 function updateSubmitBtn(){
   const name=document.getElementById('nameInput').value.trim();
-  const pin=document.getElementById('pinInput').value.trim();
+  const pin=toHalf(document.getElementById("pinInput").value);
   document.getElementById('submitBtn').disabled=!(name&&pin.length===4&&Object.keys(selections).length>0);
 }
 document.getElementById('nameInput').addEventListener('input',updateSubmitBtn);
@@ -598,7 +599,7 @@ document.getElementById('nextMonthBtn').addEventListener('click',()=>{
 // ── 送信 ──
 document.getElementById('submitBtn').addEventListener('click',async()=>{
   const name=document.getElementById('nameInput').value.trim();
-  const pin=document.getElementById('pinInput').value.trim();
+  const pin=toHalf(document.getElementById("pinInput").value);
   if(!name||pin.length!==4) return;
   const btn=document.getElementById('submitBtn');
   btn.innerHTML='<span class="spinner"></span>送信中…';btn.disabled=true;
@@ -672,7 +673,7 @@ document.getElementById('editBtn').addEventListener('click',()=>{
 
 // ── PIN確認 ──
 document.getElementById('pinConfirmBtn').addEventListener('click',async()=>{
-  const pin=document.getElementById('pinVerifyInput').value.trim();
+  const pin=toHalf(document.getElementById("pinVerifyInput").value);
   if(pin.length!==4){document.getElementById('pinError').textContent='4桁で入力してください';return}
   if(GAS_URL==='YOUR_GAS_URL_HERE'){
     document.getElementById('pinOverlay').classList.remove('open');enterEditMode();return;
@@ -780,8 +781,9 @@ document.getElementById('adminBtn').addEventListener('click',()=>{
 document.getElementById('adminClose').addEventListener('click',()=>document.getElementById('adminOverlay').classList.remove('open'));
 document.getElementById('adminOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('open')});
 
-document.getElementById('adminLoginBtn').addEventListener('click',async()=>{
-  const pin=document.getElementById('adminPinInput').value.trim();
+document.getElementById('adminLoginBtn').addEventListener('click',async()=>{\n  // 全角数字を半角に変換してトリム
+  const raw=document.getElementById('adminPinInput').value;
+  const pin=raw.replace(/[０-９]/g,s=>String.fromCharCode(s.charCodeAt(0)-0xFEE0)).replace(/\s/g,'').trim();
   // GAS接続時はサーバー側で確認、デモ時はconfigと照合
   let ok=false;
   if(GAS_URL==='YOUR_GAS_URL_HERE'){
@@ -825,7 +827,7 @@ document.getElementById('closedToggle').addEventListener('click',function(){this
 
 document.getElementById('adminSaveBtn').addEventListener('click',async()=>{
   const name=document.getElementById('adminEventName').value.trim();
-  const newPin=document.getElementById('adminNewPin').value.trim();
+  const newPin=toHalf(document.getElementById("adminNewPin").value);
   const [y1,m1]=document.getElementById('adminMonth1').value.split('-').map(Number);
   const [y2,m2]=document.getElementById('adminMonth2').value.split('-').map(Number);
   if(name) config.eventName=name;
