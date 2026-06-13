@@ -355,6 +355,7 @@ let selections = {};
 let dashData = {}, allParticipants = [];
 let viewingName = null, editingName = null, isEditMode = false;
 let holidays = {};
+let verifiedPin = ''; // PIN検証時に確認済みのハッシュを保持
 
 function toKey(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` }
 function pad(n) { return String(n).padStart(2, '0') }
@@ -544,10 +545,13 @@ function renderSelected() {
 
 function updateSubmitBtn() {
   const name = document.getElementById('nameInput').value.trim();
-  const pin  = toHalf(document.getElementById('pinInput').value);
-  document.getElementById('submitBtn').disabled = !(name && pin.length === 4 && Object.keys(selections).length > 0);
+  if (isEditMode) {
+    document.getElementById('submitBtn').disabled = !(name && Object.keys(selections).length > 0);
+  } else {
+    const pin = toHalf(document.getElementById('pinInput').value);
+    document.getElementById('submitBtn').disabled = !(name && pin.length === 4 && Object.keys(selections).length > 0);
+  }
 }
-
 document.getElementById('nameInput').addEventListener('input', updateSubmitBtn);
 document.getElementById('pinInput').addEventListener('input', updateSubmitBtn);
 
@@ -565,15 +569,15 @@ document.getElementById('nextMonthBtn').addEventListener('click', () => {
 // ── 回答送信 ──
 document.getElementById('submitBtn').addEventListener('click', async () => {
   const name = document.getElementById('nameInput').value.trim();
-  const pin  = toHalf(document.getElementById('pinInput').value);
-  if (!name || pin.length !== 4) return;
-  const btn = document.getElementById('submitBtn');
-  btn.innerHTML = '<span class="spinner"></span>送信中…'; btn.disabled = true;
+  const pin  = isEditMode ? verifiedPin : simpleHash(toHalf(document.getElementById('pinInput').value));
+  if (!name) return;
+  if (!isEditMode && toHalf(document.getElementById('pinInput').value).length !== 4) return;
+  // ...以降は同じ（pin_hash: pin に変更）
   const payload = {
-    action: 'submit', name, pin_hash: simpleHash(pin), overwrite: isEditMode,
+    action: 'submit', name, pin_hash: pin, overwrite: isEditMode,
     selections: Object.entries(selections).map(([date, state]) => ({ date, state }))
   };
-  try {
+ try {
     const res  = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) });
     const json = await res.json();
     if (json.status === 'ok') {
@@ -606,8 +610,7 @@ function enterEditMode() {
   document.getElementById('nameCard').style.display   = 'block';
   document.getElementById('nameInput').value    = viewingName;
   document.getElementById('nameInput').readOnly = true;
-  document.getElementById('pinCard').style.display    = 'block';
-  document.getElementById('pinInput').value     = '';
+  document.getElementById('pinCard').style.display    = 'none'; // ← none に変更
   document.getElementById('submitArea').style.display = 'block';
   document.getElementById('editArea').style.display   = 'none';
   document.getElementById('submitBtn').textContent    = '修正を保存';
@@ -644,7 +647,11 @@ document.getElementById('pinConfirmBtn').addEventListener('click', async () => {
   try {
     const res  = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'verify_pin', name: editingName, pin_hash: simpleHash(pin) }) });
     const json = await res.json();
-    if (json.status === 'ok') { document.getElementById('pinOverlay').classList.remove('open'); enterEditMode(); }
+    if (json.status === 'ok') {
+      verifiedPin = simpleHash(pin); // ← 保存
+      document.getElementById('pinOverlay').classList.remove('open');
+      enterEditMode();
+    }
     else document.getElementById('pinError').textContent = 'パスワードが違います';
   } catch(e) { document.getElementById('pinError').textContent = '確認に失敗しました'; }
 });
