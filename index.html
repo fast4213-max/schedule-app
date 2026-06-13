@@ -473,13 +473,8 @@ function applyConfig() {
 
   const banner = document.getElementById('closedBanner');
   const form   = document.getElementById('answerForm');
-  if (config.closed) {
-  banner.style.display = 'block';
-  form.style.display = 'none';
-  } else {
-  banner.style.display = 'none';
-  form.style.display = 'block'; // ← ここで初めて表示
-  }
+  if (config.closed) { banner.style.display = 'block'; form.style.display = 'none'; }
+  else               { banner.style.display = 'none';  form.style.display = 'block'; }
 
 // ── タブ切替 ──
 document.querySelectorAll('.tab').forEach(tab => {
