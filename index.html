@@ -398,7 +398,7 @@ let selections={};
 let dashYear,dashMonth;
 let dashData={},allParticipants=[];
 let viewingName=null,editingName=null,isEditMode=false;
-let holidays={}; // { 'YYYY-MM-DD': '祝日名' }
+let holidays={};
 
 // ── utils ──
 function toKey(d){return`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
@@ -411,16 +411,13 @@ function simpleHash(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i
 
 // ── 祝日読み込み ──
 async function loadHolidays(){
-  // キャッシュ確認（当日中は再取得しない）
   const cacheKey='holidays_cache';
   const cached=sessionStorage.getItem(cacheKey);
   if(cached){
     try{ holidays=JSON.parse(cached); return; }catch(e){}
   }
   if(GAS_URL==='YOUR_GAS_URL_HERE'){
-    // デモ用：固定の祝日データ（2026〜2027年・内閣府公式データ準拠）
     holidays={
-      // 2026年（令和8年）
       '2026-01-01':'元日','2026-01-12':'成人の日',
       '2026-02-11':'建国記念の日','2026-02-23':'天皇誕生日',
       '2026-03-20':'春分の日',
@@ -431,7 +428,6 @@ async function loadHolidays(){
       '2026-09-21':'敬老の日','2026-09-22':'休日','2026-09-23':'秋分の日',
       '2026-10-12':'スポーツの日',
       '2026-11-03':'文化の日','2026-11-23':'勤労感謝の日',
-      // 2027年（令和9年）
       '2027-01-01':'元日','2027-01-11':'成人の日',
       '2027-02-11':'建国記念の日','2027-02-23':'天皇誕生日',
       '2027-03-21':'春分の日','2027-03-22':'休日',
@@ -484,16 +480,25 @@ async function loadConfig(){
 }
 
 // ── 設定：GASに保存 ──
+// 【修正済み】adminPinHash がある場合のみ adminPin を送信し、平文PINは除外する
 async function saveConfig(){
   applyConfig();
   if(GAS_URL==='YOUR_GAS_URL_HERE') return;
   try{
-    const savePayload={...config};
-    // パスワード変更があればハッシュ値をadminPinとして送る
-    if(config.adminPinHash) savePayload.adminPin=config.adminPinHash;
+    const savePayload={
+      eventName: config.eventName,
+      closed:    config.closed,
+      month1:    config.month1,
+      month2:    config.month2,
+    };
+    // パスワード変更がある場合のみ adminPin（ハッシュ）を追加
+    if(config.adminPinHash){
+      savePayload.adminPin = config.adminPinHash;
+    }
     await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'save_config',config:savePayload})});
   }catch(e){}
 }
+
 function applyConfig(){
   document.getElementById('headerTitle').textContent='📅 '+config.eventName;
   document.title=config.eventName;
@@ -549,7 +554,6 @@ function renderCal(){
     const isReadonly=viewingName!==null&&!isEditMode;
     const holName=holidays[key]||null;
     const isHoliday=holName!==null;
-    // 祝日は日曜と同じ赤（土曜より優先）
     const colorClass=isHoliday||dow===0?' sun':dow===6?' sat':'';
     const el=document.createElement('div');
     el.className='cal-day'+colorClass+(isPast?' past':'')+(isReadonly?' readonly':'')+(isHoliday?' holiday':'');
@@ -560,7 +564,6 @@ function renderCal(){
     const state=selections[key];
     if(state){el.classList.add('state-'+state);badge.textContent=SL[state]}
 
-    // 祝日名を小さく表示
     const holEl=document.createElement('div');
     holEl.className='day-holiday';
     if(isHoliday) holEl.textContent=holName;
@@ -592,12 +595,12 @@ document.getElementById('pinInput').addEventListener('input',updateSubmitBtn);
 document.getElementById('prevMonthBtn').addEventListener('click',()=>{
   if(calYear===calMinYear&&calMonth===calMinMonth) return;
   calMonth--;if(calMonth<0){calMonth=11;calYear--}
-  renderCal(); // selectionsは変更しない
+  renderCal();
 });
 document.getElementById('nextMonthBtn').addEventListener('click',()=>{
   if(calYear===calMaxYear&&calMonth===calMaxMonth) return;
   calMonth++;if(calMonth>11){calMonth=0;calYear++}
-  renderCal(); // selectionsは変更しない
+  renderCal();
 });
 
 // ── 送信 ──
@@ -761,10 +764,8 @@ function renderParticipants(){
   list.querySelectorAll('.participant-chip').forEach(chip=>{
     chip.addEventListener('click',async()=>{
       const name=chip.dataset.name;
-      // ローディング表示
       chip.textContent=name+' …';
       chip.style.opacity='0.6';
-      // 全期間のデータを取得してから閲覧モードへ
       const userSel = await fetchAllSelectionsForUser(name);
       chip.textContent=name;
       chip.style.opacity='';
@@ -781,15 +782,12 @@ function renderParticipants(){
 async function fetchAllSelectionsForUser(name){
   const userSel={};
   if(GAS_URL==='YOUR_GAS_URL_HERE'){
-    // デモ：dashDataから取得
     Object.entries(dashData).forEach(([date,states])=>{
       ['ok','maybe','ng'].forEach(st=>{if((states[st]||[]).includes(name)) userSel[date]=st});
     });
     return userSel;
   }
-  // 全対象月を順に取得
   try{
-    // calMin〜calMaxの全月をループ
     let y=calMinYear, m=calMinMonth;
     const fetches=[];
     while(y<calMaxYear||(y===calMaxYear&&m<=calMaxMonth)){
@@ -853,7 +851,6 @@ function populateMonthSelects(){
   ['adminMonth1','adminMonth2'].forEach((id,idx)=>{
     const sel=document.getElementById(id);
     sel.innerHTML='';
-    // 24ヶ月分（約2年）表示
     for(let i=0;i<24;i++){
       const d=new Date(now.getFullYear(),now.getMonth()+i,1);
       const y=d.getFullYear(),m1idx=d.getMonth()+1;
@@ -866,26 +863,39 @@ function populateMonthSelects(){
 }
 document.getElementById('closedToggle').addEventListener('click',function(){this.classList.toggle('on')});
 
+// 【修正済み】adminSaveBtn: adminPinHash をセットしてから saveConfig を呼び、保存後にリセット
 document.getElementById('adminSaveBtn').addEventListener('click',async()=>{
   const name=document.getElementById('adminEventName').value.trim();
   const newPin=toHalf(document.getElementById("adminNewPin").value);
   const [y1,m1str]=document.getElementById('adminMonth1').value.split('-');
   const [y2,m2str]=document.getElementById('adminMonth2').value.split('-');
-  const y1n=Number(y1),m1n=Number(m1str)-1; // 0始まりに変換
+  const y1n=Number(y1),m1n=Number(m1str)-1;
   const y2n=Number(y2),m2n=Number(m2str)-1;
-  // 終了月が開始月より前の場合は自動で開始月に合わせる
   const validEnd=(y2n>y1n||(y2n===y1n&&m2n>=m1n));
   if(!validEnd){ showToast('⚠ 終了月は開始月以降にしてください'); return; }
-  // 期間を表示
   const monthCount=(y2n-y1n)*12+(m2n-m1n)+1;
   if(name) config.eventName=name;
-  if(newPin.length===4){ config.adminPin=newPin; config.adminPinHash=simpleHash(newPin); }
+
+  // パスワード変更がある場合のみ adminPinHash をセット
+  if(newPin.length===4){
+    config.adminPinHash = simpleHash(newPin);
+  } else {
+    // 変更なし → adminPinHash は送らない
+    delete config.adminPinHash;
+  }
+
   config.month1={year:y1n,month:m1n};
   config.month2={year:y2n,month:m2n};
   config.closed=document.getElementById('closedToggle').classList.contains('on');
+
   const btn=document.getElementById('adminSaveBtn');
   btn.textContent='保存中…';btn.disabled=true;
+
   await saveConfig();
+
+  // 保存後に adminPinHash をリセット（次回の誤送信防止）
+  delete config.adminPinHash;
+
   btn.textContent='💾 設定を保存';btn.disabled=false;
   document.getElementById('adminOverlay').classList.remove('open');
   showToast(`✓ 保存しました（対象：${monthCount}ヶ月）`);
@@ -937,7 +947,6 @@ document.getElementById('adminClearAllBtn').addEventListener('click',async()=>{
     okLabel:'全員削除する'
   });
   if(!ok) return;
-  // 2回目確認
   const ok2=await showConfirm({
     icon:'🚨',
     title:'最終確認',
