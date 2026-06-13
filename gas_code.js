@@ -87,7 +87,7 @@ function doGet(e) {
     return jsonRes({
       config: {
         eventName: s['eventName'] || 'スケジュール調整',
-        closed:    s['closed'] === 'true',
+        closed: s['closed'] === 'true' || s['closed'] === 'TRUE' || s['closed'] === true,
         month1,
         month2,
       }
