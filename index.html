@@ -344,13 +344,11 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
 <div class="toast" id="toast"></div>
 
 <script>
-// ここに実際のGAS URLを入力してください
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz2xdf4Br__062knltHb8BakT686O-f9x7kpaVtkZMrkNHIvPAN4ykyHIExNXWkHsxn/exec';
 
 const STATES = [null, 'ok', 'maybe', 'ng'];
 const SL = { ok: '○', maybe: '△', ng: '✕' };
 
-// config はメモリ上の状態。真のソースはGASスプレッドシート。
 let config = { eventName: 'スケジュール調整', month1: null, month2: null, closed: false };
 let calYear, calMonth, calMinYear, calMinMonth, calMaxYear, calMaxMonth;
 let selections = {};
@@ -418,7 +416,6 @@ async function loadConfig() {
     const res = await fetch(`${GAS_URL}?action=get_config`);
     const json = await res.json();
     if (json.config) {
-      // 各フィールドを明示的に上書き（Object.assignだとundefinedが混入するケースを防ぐ）
       if (json.config.eventName !== undefined) config.eventName = json.config.eventName;
       if (json.config.closed   !== undefined) config.closed    = Boolean(json.config.closed);
       if (json.config.month1   !== undefined) config.month1    = json.config.month1;
@@ -432,10 +429,9 @@ async function loadConfig() {
 
 // ── 設定保存 ──
 async function saveConfig(newClosed, newEventName, newMonth1, newMonth2, newPinHash) {
-  // 引数を直接使用することでメモリ上の config との競合を防ぐ
   const savePayload = {
     eventName: newEventName,
-    closed:    newClosed,   // boolean をそのまま渡す（GAS側で String() する）
+    closed:    newClosed,
     month1:    newMonth1,
     month2:    newMonth2,
   };
@@ -448,7 +444,6 @@ async function saveConfig(newClosed, newEventName, newMonth1, newMonth2, newPinH
   const json = await res.json();
   if (json.status !== 'ok') throw new Error('保存失敗');
 
-  // 保存成功後にメモリも更新
   config.eventName = newEventName;
   config.closed    = newClosed;
   config.month1    = newMonth1;
@@ -475,6 +470,7 @@ function applyConfig() {
   const form   = document.getElementById('answerForm');
   if (config.closed) { banner.style.display = 'block'; form.style.display = 'none'; }
   else               { banner.style.display = 'none';  form.style.display = 'block'; }
+} // ← ここが抜けていた
 
 // ── タブ切替 ──
 document.querySelectorAll('.tab').forEach(tab => {
@@ -793,7 +789,6 @@ document.getElementById('adminLoginBtn').addEventListener('click', async () => {
       document.getElementById('adminEventName').value = config.eventName;
       document.getElementById('adminNewPin').value    = '';
       populateMonthSelects();
-      // 現在の closed 状態をトグルに反映
       const toggle = document.getElementById('closedToggle');
       toggle.className = 'toggle' + (config.closed ? ' on' : '');
       updateDeleteSelect();
@@ -831,7 +826,6 @@ document.getElementById('adminSaveBtn').addEventListener('click', async () => {
   const y2n = Number(y2), m2n = Number(m2str) - 1;
   if (!(y2n > y1n || (y2n === y1n && m2n >= m1n))) { showToast('⚠ 終了月は開始月以降にしてください'); return; }
 
-  // DOMから closed の状態を読む（boolean で扱う）
   const newClosed = document.getElementById('closedToggle').classList.contains('on');
   const newMonth1 = { year: y1n, month: m1n };
   const newMonth2 = { year: y2n, month: m2n };
